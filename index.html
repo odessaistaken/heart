@@ -14,11 +14,10 @@
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      min-height: 100dvh; /* mobile safe area */
+      min-height: 100dvh;
       overflow: hidden;
     }
 
-    /* Responsive wrapper — canvas fills this square */
     .wrapper {
       position: relative;
       width: min(700px, 95vmin);
@@ -26,49 +25,37 @@
       flex-shrink: 0;
     }
 
-    canvas {
-      display: block;
+    /* Both canvases overlap perfectly */
+    .wrapper canvas {
+      position: absolute;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
+      display: block;
     }
 
-    /* Text overlay — always on top, scales with wrapper */
-    .label {
-      position: absolute;
-      /* Positioned just above the heart's highest point (~38% from top of canvas) */
-      top: 38%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: flex;
-      align-items: center;
-      gap: 0.45em;
-      white-space: nowrap;
-      pointer-events: none;
-
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-weight: 300;
-      /* clamp: small on tiny phones, grows with viewport */
-      font-size: clamp(16px, 5.5vmin, 40px);
-      letter-spacing: 0.18em;
-      color: rgba(255, 175, 190, 0.92);
-      text-shadow:
-        0 0 18px rgba(255, 100, 130, 0.55),
-        0 0 40px rgba(255, 70, 110, 0.25);
-    }
-
+    /* Text canvas is on top, pointer-events ignored */
+    #t { pointer-events: none; }
   </style>
 </head>
 <body>
   <div class="wrapper">
-    <canvas id="c"></canvas>
+    <canvas id="c"></canvas>  <!-- kalp çizgileri -->
+    <canvas id="t"></canvas>  <!-- sadece metin -->
   </div>
 
   <script>
+    // ── Heart canvas (strokes accumulate here) ────────────────────
     const canvas = document.getElementById('c');
     const ctx    = canvas.getContext('2d');
+
+    // ── Text canvas (cleared + redrawn every frame — no buildup) ─
+    const tCanvas = document.getElementById('t');
+    const tCtx    = tCanvas.getContext('2d');
+
     const W = 700, H = 700;
-    canvas.width  = W;
-    canvas.height = H;
+    canvas.width  = W;  canvas.height  = H;
+    tCanvas.width = W;  tCanvas.height = H;
 
     const PI  = Math.PI;
     const rnd = (a, b) => Math.random() * (b - a) + a;
@@ -79,16 +66,14 @@
       return [x, y];
     }
 
-    // Canvas transform: turtle coords → canvas coords (y-flip, centered)
     const CX = W / 2;
-    const CY = H / 2 + 45;   // shift up slightly for heart asymmetry
+    const CY = H / 2 + 45;
     function tc(x, y) { return [CX + x, CY - y]; }
 
-    // ── Build stroke list (exact mirror of the Python script) ──────
+    // ── Build stroke list ─────────────────────────────────────────
     function buildStrokes() {
       const strokes = [];
 
-      // Phase 1 — inner fill: 10 000 strokes at random scales 0.5–15.5
       for (let i = 0; i < 10000; i++) {
         const a  = rnd(0, 2 * PI);
         const sc = rnd(0.5, 15.5);
@@ -106,7 +91,6 @@
         });
       }
 
-      // Phase 2 — outline: 3 500 strokes at scale 16
       for (let i = 0; i < 3500; i++) {
         const a = rnd(0, 2 * PI);
         const [x, y] = heart(a, 16.0);
@@ -127,62 +111,51 @@
       return strokes;
     }
 
-    // ── Text label drawn on canvas ────────────────────────────────
-    // Drawn every frame on top of strokes so it's always visible
-    function drawLabel(t) {
-      // Gentle pulse: scale between 1.0 and 1.04
-      const pulse = 1 + 0.04 * Math.abs(Math.sin(t * 0.0008));
+    // ── Text label — drawn on separate transparent canvas ─────────
+    // Canvas is fully cleared each frame so no shadow accumulation.
+    const FONT_SIZE = Math.round(W * 0.052);   // ~36px
+    const LABEL_Y   = CY - 16 * 13 - FONT_SIZE * 1.5; // above heart top
+    const LABEL_X   = CX;
 
-      const fontSize  = Math.round(W * 0.055);  // ~38px on 700px canvas
-      const labelY    = CY - 16 * 13 - fontSize * 1.6; // above heart top
-      const labelX    = CX;
+    function drawLabel(now) {
+      tCtx.clearRect(0, 0, W, H);
 
-      ctx.save();
-      ctx.translate(labelX, labelY);
-      ctx.scale(pulse, pulse);
-      ctx.translate(-labelX, -labelY);
+      // Very subtle breathing pulse — barely noticeable
+      const scale = 1 + 0.018 * Math.sin(now * 0.0012);
 
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font         = `300 ${fontSize}px Georgia, serif`;
+      tCtx.save();
+      tCtx.translate(LABEL_X, LABEL_Y);
+      tCtx.scale(scale, scale);
+      tCtx.translate(-LABEL_X, -LABEL_Y);
 
-      // Glow
-      ctx.shadowColor  = 'rgba(255, 100, 130, 0.7)';
-      ctx.shadowBlur   = 18;
-      ctx.fillStyle    = 'rgba(255, 185, 200, 0.95)';
-      ctx.fillText('Kaan \u2665 Nisa', labelX, labelY);
+      tCtx.textAlign    = 'center';
+      tCtx.textBaseline = 'middle';
+      tCtx.font         = `300 ${FONT_SIZE}px "Georgia", serif`;
+      tCtx.letterSpacing = '0.12em';
 
-      // Sharper second pass
-      ctx.shadowBlur   = 6;
-      ctx.fillStyle    = 'rgba(255, 200, 210, 1)';
-      ctx.fillText('Kaan \u2665 Nisa', labelX, labelY);
+      // Single clean pass — no shadow, no glow, transparent background
+      tCtx.fillStyle = 'rgba(255, 188, 200, 0.88)';
+      tCtx.fillText('Kaan  \u2665  Nisa', LABEL_X, LABEL_Y);
 
-      ctx.restore();
+      tCtx.restore();
     }
 
-    // ── Animation loop (time-based: exactly 60 seconds per cycle) ──
-    const DURATION_MS = 60_000; // 1 minute per full draw cycle
-    let strokes  = [];
-    let total    = 0;
-    let startTs  = 0;
+    // ── Animation loop ────────────────────────────────────────────
+    const DURATION_MS = 60_000;
+    let strokes = [], total = 0, startTs = 0;
 
     function nextCycle() {
       ctx.clearRect(0, 0, W, H);
       strokes = buildStrokes();
-      total   = strokes.length; // 13 500
+      total   = strokes.length;
       startTs = performance.now();
       requestAnimationFrame(draw);
     }
 
     function draw(now) {
       const elapsed = now - startTs;
-      // How many strokes should be visible by now?
-      const target = Math.min(
-        Math.floor((elapsed / DURATION_MS) * total),
-        total
-      );
+      const target  = Math.min(Math.floor((elapsed / DURATION_MS) * total), total);
 
-      // Draw only the newly revealed strokes this frame
       for (let i = Math.max(0, window._cursor ?? 0); i < target; i++) {
         const s = strokes[i];
         const [sx, sy] = tc(s.x1, s.y1);
@@ -196,11 +169,10 @@
       }
       window._cursor = target;
 
-      // Always draw label on top
+      // Redraw text on its own clean canvas
       drawLabel(now);
 
       if (target >= total) {
-        // Cycle complete — restart
         window._cursor = 0;
         nextCycle();
       } else {
