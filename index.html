@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heart</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: black; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx    = canvas.getContext('2d');
+    const W = 700, H = 700;
+    canvas.width  = W;
+    canvas.height = H;
+
+    const PI  = Math.PI;
+    const rnd = (a, b) => Math.random() * (b - a) + a;
+
+    function heart(a, scale) {
+      const x =  16 * Math.pow(Math.sin(a), 3) * scale;
+      const y = (13 * Math.cos(a) - 5 * Math.cos(2*a) - 2 * Math.cos(3*a) - Math.cos(4*a)) * scale;
+      return [x, y];
+    }
+
+    // Canvas transform: turtle coords → canvas coords (y-flip, centered)
+    const CX = W / 2;
+    const CY = H / 2 + 45;   // shift up slightly for heart asymmetry
+    function tc(x, y) { return [CX + x, CY - y]; }
+
+    // ── Build stroke list (exact mirror of the Python script) ──────
+    function buildStrokes() {
+      const strokes = [];
+
+      // Phase 1 — inner fill: 10 000 strokes at random scales 0.5–15.5
+      for (let i = 0; i < 10000; i++) {
+        const a  = rnd(0, 2 * PI);
+        const sc = rnd(0.5, 15.5);
+        const [x, y] = heart(a, sc);
+        const ang = Math.atan2(y, x) + rnd(-0.5, 0.5);
+        const len = rnd(4, 14);
+        strokes.push({
+          x1: x,   y1: y,
+          x2: x + len * Math.cos(ang),
+          y2: y + len * Math.sin(ang),
+          r: 255,
+          g: Math.round(rnd(0.25, 0.55) * 255),
+          b: Math.round(rnd(0.65, 0.85) * 255),
+          w: rnd(0.5, 1.2)
+        });
+      }
+
+      // Phase 2 — outline: 3 500 strokes at scale 16
+      for (let i = 0; i < 3500; i++) {
+        const a = rnd(0, 2 * PI);
+        const [x, y] = heart(a, 16.0);
+        const dx  = rnd(-2, 2), dy = rnd(-2, 2);
+        const ang = Math.atan2(y, x) + rnd(-0.35, 0.35);
+        const len = rnd(10, 32);
+        strokes.push({
+          x1: x + dx,  y1: y + dy,
+          x2: x + len * Math.cos(ang),
+          y2: y + len * Math.sin(ang),
+          r: 255,
+          g: Math.round(rnd(0.45, 0.75) * 255),
+          b: Math.round(rnd(0.75, 0.95) * 255),
+          w: rnd(0.4, 0.9)
+        });
+      }
+
+      return strokes;
+    }
+
+    // ── Animation loop (time-based: exactly 60 seconds per cycle) ──
+    const DURATION_MS = 60_000; // 1 minute per full draw cycle
+    let strokes  = [];
+    let total    = 0;
+    let startTs  = 0;
+
+    function nextCycle() {
+      ctx.clearRect(0, 0, W, H);
+      strokes = buildStrokes();
+      total   = strokes.length; // 13 500
+      startTs = performance.now();
+      requestAnimationFrame(draw);
+    }
+
+    function draw(now) {
+      const elapsed = now - startTs;
+      // How many strokes should be visible by now?
+      const target = Math.min(
+        Math.floor((elapsed / DURATION_MS) * total),
+        total
+      );
+
+      // Draw only the newly revealed strokes this frame
+      for (let i = Math.max(0, window._cursor ?? 0); i < target; i++) {
+        const s = strokes[i];
+        const [sx, sy] = tc(s.x1, s.y1);
+        const [ex, ey] = tc(s.x2, s.y2);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},0.82)`;
+        ctx.lineWidth   = s.w;
+        ctx.stroke();
+      }
+      window._cursor = target;
+
+      if (target >= total) {
+        // Cycle complete — restart
+        window._cursor = 0;
+        nextCycle();
+      } else {
+        requestAnimationFrame(draw);
+      }
+    }
+
+    nextCycle();
+  </script>
+</body>
+</html>
