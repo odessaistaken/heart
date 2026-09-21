@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kaan ♥ Nisa</title>
   <meta name="description" content="Kaan ♥ Nisa — parametrik kalp animasyonu" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -58,33 +56,11 @@
         0 0 40px rgba(255, 70, 110, 0.25);
     }
 
-    .heart-icon {
-      display: inline-block;
-      color: rgba(255, 130, 155, 0.95);
-      font-size: 0.85em;
-      line-height: 1;
-      /* subtle pulse matching the drawing rhythm */
-      animation: hb 2.4s ease-in-out infinite;
-      text-shadow:
-        0 0 12px rgba(255, 80, 120, 0.7),
-        0 0 28px rgba(255, 60, 100, 0.4);
-    }
-
-    @keyframes hb {
-      0%, 100% { transform: scale(1);    opacity: 0.92; }
-      40%       { transform: scale(1.22); opacity: 1;    }
-      55%       { transform: scale(1.10); opacity: 1;    }
-    }
   </style>
 </head>
 <body>
   <div class="wrapper">
     <canvas id="c"></canvas>
-    <div class="label">
-      <span>Kaan</span>
-      <span class="heart-icon">♥</span>
-      <span>Nisa</span>
-    </div>
   </div>
 
   <script>
@@ -151,6 +127,39 @@
       return strokes;
     }
 
+    // ── Text label drawn on canvas ────────────────────────────────
+    // Drawn every frame on top of strokes so it's always visible
+    function drawLabel(t) {
+      // Gentle pulse: scale between 1.0 and 1.04
+      const pulse = 1 + 0.04 * Math.abs(Math.sin(t * 0.0008));
+
+      const fontSize  = Math.round(W * 0.055);  // ~38px on 700px canvas
+      const labelY    = CY - 16 * 13 - fontSize * 1.6; // above heart top
+      const labelX    = CX;
+
+      ctx.save();
+      ctx.translate(labelX, labelY);
+      ctx.scale(pulse, pulse);
+      ctx.translate(-labelX, -labelY);
+
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font         = `300 ${fontSize}px Georgia, serif`;
+
+      // Glow
+      ctx.shadowColor  = 'rgba(255, 100, 130, 0.7)';
+      ctx.shadowBlur   = 18;
+      ctx.fillStyle    = 'rgba(255, 185, 200, 0.95)';
+      ctx.fillText('Kaan \u2665 Nisa', labelX, labelY);
+
+      // Sharper second pass
+      ctx.shadowBlur   = 6;
+      ctx.fillStyle    = 'rgba(255, 200, 210, 1)';
+      ctx.fillText('Kaan \u2665 Nisa', labelX, labelY);
+
+      ctx.restore();
+    }
+
     // ── Animation loop (time-based: exactly 60 seconds per cycle) ──
     const DURATION_MS = 60_000; // 1 minute per full draw cycle
     let strokes  = [];
@@ -186,6 +195,9 @@
         ctx.stroke();
       }
       window._cursor = target;
+
+      // Always draw label on top
+      drawLabel(now);
 
       if (target >= total) {
         // Cycle complete — restart
